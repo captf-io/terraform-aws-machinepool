@@ -494,13 +494,23 @@ the part that lives in source.
 ## 17. Documentation
 
 The README has the H1 `terraform-<provider>-<role>` and these sections, in
-this order: What it creates (resource table), Prerequisites (network,
+this order: Usage (the module image, the Terraform Registry address
+`captf-io/<role>/<provider>` and what calling it directly implies),
+What it creates (resource table), Prerequisites (network,
 quotas, the permissions the identity needs, image requirements), Inputs
 (contract inputs used; user variables table), Outputs, Exports, Identity
 Secret, Lifecycle (machinepool: what updates in place and what rolls),
 Bootstrap (machine and machinepool), Tags, Health, any cloud-specific
 sections, Limitations, Exceptions, Examples, Development (the host tools
 and the `make` targets).
+
+Links in the README are absolute (`https://github.com/captf-io/<repo>/blob/main/...`):
+the Terraform Registry renders it as the module's page, where relative
+links break.
+
+A release is a signed `vX.Y.Z` tag on `main`; the Terraform Registry
+publishes every semantic-version tag as a module version within a minute
+of the push. Versions follow the CAPTF release they were cut with.
 
 `DESIGN.md` is specific to the repository's role and has exactly these
 top-level sections: Scope, Decisions, Exports, Unverified, Rejected

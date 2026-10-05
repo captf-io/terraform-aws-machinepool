@@ -8,6 +8,34 @@ implements the `v1alpha1`
 and ships as `ghcr.io/captf-io/aws-machinepool`. Pool instances are workers;
 everything cluster-wide comes from the cluster's exports.
 
+## Usage
+
+CAPTF runs this module from the module image `ghcr.io/captf-io/aws-machinepool`: set the image on
+a `TerraformMachinePool`'s `spec.source.image`, and the controller renders every
+input. The module is also published to the Terraform Registry as
+`captf-io/machinepool/aws` and can be called directly:
+
+```hcl
+module "machinepool" {
+  source  = "captf-io/machinepool/aws"
+  version = "~> 0.1"
+
+  # The contract inputs the controller would render (captf_contract,
+  # captf_cluster, captf_object, captf_tags, ...; see Inputs), and any
+  # user variables.
+}
+```
+
+Called directly, the module is a CAPTF root module first:
+
+- it configures its own `provider "aws"` block, so the calling
+  module cannot use `count`, `for_each` or `depends_on` on it, and the
+  provider takes its credentials from the environment (see Identity
+  Secret);
+- its providers are pinned to exact versions (`versions.tf`), which the
+  calling configuration has to accept;
+- you set the `captf_*` inputs yourself.
+
 ## What it creates
 
 | Resource | Count | Purpose |
@@ -45,7 +73,7 @@ It reads `data.aws_instances.pool_members` (one per cluster zone),
   the template describes),
   `iam:CreateServiceLinkedRole` for `autoscaling.amazonaws.com` once per
   account, and the S3 object permissions: see
-  [`examples/identity-policy.json`](examples/identity-policy.json).
+  [`examples/identity-policy.json`](https://github.com/captf-io/terraform-aws-machinepool/blob/main/examples/identity-policy.json).
 
 ## Inputs
 
@@ -207,7 +235,7 @@ desired capacity.
 
 ## Examples
 
-[`examples/cluster-kubeadm.yaml`](examples/cluster-kubeadm.yaml) adds an
+[`examples/cluster-kubeadm.yaml`](https://github.com/captf-io/terraform-aws-machinepool/blob/main/examples/cluster-kubeadm.yaml) adds an
 autoscaled pool:
 
 ```yaml
