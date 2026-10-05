@@ -493,16 +493,19 @@ the part that lives in source.
 
 ## 17. Documentation
 
-The README has the H1 `terraform-<provider>-<role>` and these sections, in
-this order: Usage (the module image, the Terraform Registry address
+The README is composed from the
+[README components](https://captf.io/docs/developer-guide/readme-components/):
+the header (its `<h1>` is `terraform-<provider>-<role>`), the badge row and
+the status note, an intro paragraph, then these sections, in this order:
+Using it (the module image, the Terraform Registry address
 `captf-io/<role>/<provider>` and what calling it directly implies),
 What it creates (resource table), Prerequisites (network,
 quotas, the permissions the identity needs, image requirements), Inputs
 (contract inputs used; user variables table), Outputs, Exports, Identity
 Secret, Lifecycle (machinepool: what updates in place and what rolls),
 Bootstrap (machine and machinepool), Tags, Health, any cloud-specific
-sections, Limitations, Exceptions, Examples, Development (the host tools
-and the `make` targets).
+sections, Limitations, Exceptions, Examples, Developing (the host tools
+and the `make` targets), and the footer.
 
 Links in the README are absolute (`https://github.com/captf-io/<repo>/blob/main/...`):
 the Terraform Registry renders it as the module's page, where relative
