@@ -1,0 +1,59 @@
+# Copyright 2026 The CAPTF Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # Every check on the module code: license headers, fmt, layout and tags,
+  # validate on both runtimes and their floors, unit tests, shellcheck,
+  # tflint, tfcapi-lint and trivy. `make verify` runs its independent groups
+  # side by side, so the job takes as long as the slowest runtime, not the
+  # sum. tfcapi-lint is built from the provider repository, which is public.
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: captf-io/cluster-api-provider-terraform
+          path: .cache/provider
+          persist-credentials: false
+      # Caches the Go modules and build cache, keyed on the provider's go.sum,
+      # so building tfcapi-lint takes seconds on a warm cache.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: .cache/provider/go.mod
+          cache-dependency-path: .cache/provider/go.sum
+      - name: Verify
+        env:
+          # tflint downloads its rulesets from GitHub releases.
+          GITHUB_TOKEN: ${{ github.token }}
+        run: make verify ENGINE=docker PROVIDER_DIR=.cache/provider

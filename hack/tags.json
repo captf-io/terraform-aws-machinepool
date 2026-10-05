@@ -1,0 +1,7 @@
+{
+  "attribute": "tags",
+  "expression": "local.tags",
+  "exempt": {
+    "aws_s3_object": "S3 allows at most 10 tags per object; the bootstrap objects carry local.captf_tags (6) only, never additional_tags or the cluster ownership tag."
+  }
+}

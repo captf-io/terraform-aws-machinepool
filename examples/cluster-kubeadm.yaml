@@ -1,0 +1,282 @@
+# Copyright 2026 The CAPTF Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# A kubeadm cluster on the aws modules: a TerraformCluster, a
+# KubeadmControlPlane, a MachineDeployment of workers and an autoscaled
+# MachinePool. The network is yours: set the VPC and one subnet per zone.
+#
+#   export CLUSTER_NAME=demo NAMESPACE=team-a KUBERNETES_VERSION=v1.34.1
+#   export CONTROL_PLANE_MACHINE_COUNT=3 WORKER_MACHINE_COUNT=2
+#   export AWS_REGION=us-east-1 AWS_VPC_ID=vpc-0123456789abcdef0
+#   export AWS_SUBNETS='{"us-east-1a": "subnet-0aaa0000000000001", "us-east-1b": "subnet-0bbb0000000000002", "us-east-1c": "subnet-0ccc0000000000003"}'
+#   clusterctl generate yaml --from examples/cluster-kubeadm.yaml | kubectl apply -n team-a -f -
+#
+# Apply examples/identity.yaml first. Then install cloud-provider-aws and a
+# CNI in the workload cluster: nodes stay tainted
+# node.cloudprovider.kubernetes.io/uninitialized until the cloud controller
+# manager initializes them.
+#
+# The images are pinned to the v0.1.0 release on OpenTofu; move to a newer
+# release tag (vX.Y.Z-opentofu, or -terraform) or pin a digest, never a
+# moving tag, in anything you keep. Without
+# machine_image.id the machines boot the newest Cluster API Provider AWS
+# image for the version, which that project builds for testing, not
+# production.
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: Cluster
+metadata:
+  name: "${CLUSTER_NAME}"
+spec:
+  clusterNetwork:
+    # The API load balancer listens on this port and kubeadm binds to it:
+    # keep it equal to bindPort below.
+    apiServerPort: 6443
+    pods:
+      cidrBlocks:
+      - "${POD_CIDR:=192.168.0.0/16}"
+    services:
+      cidrBlocks:
+      - "${SERVICE_CIDR:=10.128.0.0/12}"
+  controlPlaneRef:
+    apiGroup: controlplane.cluster.x-k8s.io
+    kind: KubeadmControlPlane
+    name: "${CLUSTER_NAME}-control-plane"
+  infrastructureRef:
+    apiGroup: infrastructure.cluster.x-k8s.io
+    kind: TerraformCluster
+    name: "${CLUSTER_NAME}"
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+kind: TerraformCluster
+metadata:
+  name: "${CLUSTER_NAME}"
+spec:
+  source:
+    image: ghcr.io/captf-io/aws-cluster:v0.1.0-opentofu
+  identityRef:
+    name: "${TERRAFORM_IDENTITY_NAME:=aws}"
+  # Machines and pools without their own identityRef use this one.
+  defaults:
+    identityRef:
+      name: "${TERRAFORM_IDENTITY_NAME:=aws}"
+  variables:
+    region: "${AWS_REGION}"
+    vpc_id: "${AWS_VPC_ID}"
+    subnets: ${AWS_SUBNETS}
+    # The API load balancer is internal and admits the VPC: when the
+    # management cluster is outside it, add its network, for example
+    # api_allowed_cidrs: ["10.0.0.0/16", "172.16.0.0/16"].
+---
+apiVersion: controlplane.cluster.x-k8s.io/v1beta2
+kind: KubeadmControlPlane
+metadata:
+  name: "${CLUSTER_NAME}-control-plane"
+spec:
+  replicas: ${CONTROL_PLANE_MACHINE_COUNT}
+  version: "${KUBERNETES_VERSION}"
+  machineTemplate:
+    spec:
+      infrastructureRef:
+        apiGroup: infrastructure.cluster.x-k8s.io
+        kind: TerraformMachineTemplate
+        name: "${CLUSTER_NAME}-control-plane"
+  remediation:
+    maxRetry: 3
+    retryPeriodSeconds: 300
+  kubeadmConfigSpec:
+    # The node name must be the instance's private DNS name, which
+    # cloud-provider-aws looks nodes up by; provider-id links the Node to its
+    # Machine before the cloud controller manager runs, in the format it
+    # writes itself. Both are cloud-init Jinja: CABPK renders a
+    # "## template: jinja" payload, which the stub's include keeps.
+    initConfiguration:
+      localAPIEndpoint:
+        bindPort: 6443
+      nodeRegistration:
+        name: "{{ ds.meta_data.local_hostname }}"
+        kubeletExtraArgs:
+        - name: cloud-provider
+          value: external
+        - name: provider-id
+          value: "aws:///{{ v1.availability_zone }}/{{ v1.instance_id }}"
+    joinConfiguration:
+      controlPlane:
+        localAPIEndpoint:
+          bindPort: 6443
+      nodeRegistration:
+        name: "{{ ds.meta_data.local_hostname }}"
+        kubeletExtraArgs:
+        - name: cloud-provider
+          value: external
+        - name: provider-id
+          value: "aws:///{{ v1.availability_zone }}/{{ v1.instance_id }}"
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+kind: TerraformMachineTemplate
+metadata:
+  name: "${CLUSTER_NAME}-control-plane"
+spec:
+  template:
+    spec:
+      source:
+        image: ghcr.io/captf-io/aws-machine:v0.1.0-opentofu
+      variables:
+        instance_type: "${AWS_CONTROL_PLANE_MACHINE_TYPE:=m6i.large}"
+---
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: MachineDeployment
+metadata:
+  name: "${CLUSTER_NAME}-md-0"
+spec:
+  clusterName: "${CLUSTER_NAME}"
+  replicas: ${WORKER_MACHINE_COUNT}
+  # CAPI's webhook fills in the selector and the template labels.
+  selector:
+    matchLabels:
+  template:
+    spec:
+      clusterName: "${CLUSTER_NAME}"
+      version: "${KUBERNETES_VERSION}"
+      bootstrap:
+        configRef:
+          apiGroup: bootstrap.cluster.x-k8s.io
+          kind: KubeadmConfigTemplate
+          name: "${CLUSTER_NAME}-md-0"
+      infrastructureRef:
+        apiGroup: infrastructure.cluster.x-k8s.io
+        kind: TerraformMachineTemplate
+        name: "${CLUSTER_NAME}-md-0"
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+kind: TerraformMachineTemplate
+metadata:
+  name: "${CLUSTER_NAME}-md-0"
+spec:
+  template:
+    spec:
+      source:
+        image: ghcr.io/captf-io/aws-machine:v0.1.0-opentofu
+      variables:
+        instance_type: "${AWS_NODE_MACHINE_TYPE:=m6i.large}"
+---
+apiVersion: bootstrap.cluster.x-k8s.io/v1beta2
+kind: KubeadmConfigTemplate
+metadata:
+  name: "${CLUSTER_NAME}-md-0"
+spec:
+  template:
+    spec:
+      joinConfiguration:
+        nodeRegistration:
+          name: "{{ ds.meta_data.local_hostname }}"
+          kubeletExtraArgs:
+          - name: cloud-provider
+            value: external
+          - name: provider-id
+            value: "aws:///{{ v1.availability_zone }}/{{ v1.instance_id }}"
+---
+# An autoscaled pool: between 1 and 5 instances, sized by the module's
+# target-tracking policy. Leave spec.replicas unset: CAPI defaults it from
+# the annotations, and CAPTF writes the observed size back.
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: MachinePool
+metadata:
+  name: "${CLUSTER_NAME}-pool-0"
+  annotations:
+    cluster.x-k8s.io/cluster-api-autoscaler-node-group-min-size: "1"
+    cluster.x-k8s.io/cluster-api-autoscaler-node-group-max-size: "5"
+spec:
+  clusterName: "${CLUSTER_NAME}"
+  template:
+    metadata:
+      # Rendered into the kubelet's --node-labels by the module.
+      labels:
+        node.kubernetes.io/pool: "${CLUSTER_NAME}-pool-0"
+    spec:
+      clusterName: "${CLUSTER_NAME}"
+      version: "${KUBERNETES_VERSION}"
+      bootstrap:
+        configRef:
+          apiGroup: bootstrap.cluster.x-k8s.io
+          kind: KubeadmConfig
+          name: "${CLUSTER_NAME}-pool-0"
+      infrastructureRef:
+        apiGroup: infrastructure.cluster.x-k8s.io
+        kind: TerraformMachinePool
+        name: "${CLUSTER_NAME}-pool-0"
+---
+apiVersion: bootstrap.cluster.x-k8s.io/v1beta2
+kind: KubeadmConfig
+metadata:
+  name: "${CLUSTER_NAME}-pool-0"
+spec:
+  joinConfiguration:
+    nodeRegistration:
+      name: "{{ ds.meta_data.local_hostname }}"
+      kubeletExtraArgs:
+      - name: cloud-provider
+        value: external
+      - name: provider-id
+        value: "aws:///{{ v1.availability_zone }}/{{ v1.instance_id }}"
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+kind: TerraformMachinePool
+metadata:
+  name: "${CLUSTER_NAME}-pool-0"
+  # CAPTF finds the Cluster by this label; CAPI would add it later.
+  labels:
+    cluster.x-k8s.io/cluster-name: "${CLUSTER_NAME}"
+spec:
+  source:
+    image: ghcr.io/captf-io/aws-machinepool:v0.1.0-opentofu
+  variables:
+    instance_type: "${AWS_NODE_MACHINE_TYPE:=m6i.large}"
+---
+# Workers: InfrastructureReady=False (the machine module's health) counts
+# from apply start, so the timeout must exceed apply time plus one drift
+# interval (default 30m): 45m.
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: MachineHealthCheck
+metadata:
+  name: "${CLUSTER_NAME}-md-0"
+spec:
+  clusterName: "${CLUSTER_NAME}"
+  selector:
+    matchLabels:
+      cluster.x-k8s.io/deployment-name: "${CLUSTER_NAME}-md-0"
+  checks:
+    nodeStartupTimeoutSeconds: 1200
+    unhealthyMachineConditions:
+    - type: InfrastructureReady
+      status: "False"
+      timeoutSeconds: 2700
+---
+# Control plane: a longer remediation window, since replacing a
+# control-plane machine is costlier, and a longer node-startup window, since
+# kubeadm init or join does strictly more work than a worker join.
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: MachineHealthCheck
+metadata:
+  name: "${CLUSTER_NAME}-control-plane"
+spec:
+  clusterName: "${CLUSTER_NAME}"
+  selector:
+    matchLabels:
+      cluster.x-k8s.io/control-plane: ""
+  checks:
+    nodeStartupTimeoutSeconds: 1800
+    unhealthyMachineConditions:
+    - type: InfrastructureReady
+      status: "False"
+      timeoutSeconds: 3600

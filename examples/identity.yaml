@@ -1,0 +1,78 @@
+# Copyright 2026 The CAPTF Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# The AWS credentials every Job of the cluster runs with, and the
+# TerraformClusterIdentity that lets ${NAMESPACE} use them
+# (https://captf.io/docs/user-guide/identities.html). Cluster-scoped and
+# admin-applied: apply it once, before any cluster.
+#
+#   clusterctl generate yaml --from examples/identity.yaml | kubectl apply -f -
+#
+# Every key reaches the Job as an environment variable and as a file under
+# /var/run/captf/credentials/<key>. The modules set only the region in their
+# provider block; the AWS SDK's default chain finds the rest. Give the
+# credentials the permissions in examples/identity-policy.json.
+#
+# The values below are placeholders. Prefer a role to assume (the second
+# Secret) over long-lived keys of a user with these permissions.
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+kind: TerraformClusterIdentity
+metadata:
+  name: "${TERRAFORM_IDENTITY_NAME:=aws}"
+spec:
+  secretRef:
+    name: "${TERRAFORM_IDENTITY_NAME:=aws}"
+    namespace: captf-system
+  allowedNamespaces:
+    list:
+    - "${NAMESPACE}"
+---
+# Static keys.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: "${TERRAFORM_IDENTITY_NAME:=aws}"
+  namespace: captf-system
+type: Opaque
+stringData:
+  AWS_ACCESS_KEY_ID: REPLACE_WITH_ACCESS_KEY_ID
+  AWS_SECRET_ACCESS_KEY: REPLACE_WITH_SECRET_ACCESS_KEY
+  # The cluster module's region when spec.variables.region is unset;
+  # machines and pools use the cluster's region from its exports.
+  AWS_REGION: "${AWS_REGION:=us-east-1}"
+---
+# A role to assume instead, through shared config files: the SDK reads the
+# config and credentials keys as files. HOME is /captf/work in the Job, so
+# ~/.aws never exists and the paths are explicit. Use this Secret's name in
+# spec.secretRef above instead of the first one's.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: "${TERRAFORM_IDENTITY_NAME:=aws}-assume-role"
+  namespace: captf-system
+type: Opaque
+stringData:
+  AWS_CONFIG_FILE: /var/run/captf/credentials/config
+  AWS_SHARED_CREDENTIALS_FILE: /var/run/captf/credentials/credentials
+  AWS_PROFILE: captf
+  AWS_REGION: "${AWS_REGION:=us-east-1}"
+  config: |
+    [profile captf]
+    role_arn = arn:aws:iam::123456789012:role/captf-provisioner
+    source_profile = base
+    role_session_name = captf
+  credentials: |
+    [base]
+    aws_access_key_id = REPLACE_WITH_ACCESS_KEY_ID
+    aws_secret_access_key = REPLACE_WITH_SECRET_ACCESS_KEY
