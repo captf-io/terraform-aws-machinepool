@@ -142,6 +142,12 @@ This role does not own this decision: see the [terraform-aws-machine DESIGN.md](
   `ignore_changes = [desired_capacity]`. Autoscaling off pins
   min = max = replicas, and `UpdateAutoScalingGroup` moves the desired
   capacity into the new bounds; on, a target-tracking CPU policy.
+- `autoscaler = "external"` keeps autoscaling mode but creates no policy.
+  Why: the Kubernetes Cluster Autoscaler's aws cloud provider resizes
+  Auto Scaling groups itself and picks and drains its scale-in victims; a
+  second scaler on the group (the CPU policy) would fight it. What
+  changes: only the policy; the bounds from `var.autoscaling` and
+  `ignore_changes = [desired_capacity]` are the same in both modes.
 - `wait_for_capacity_timeout = "0"`: membership is the refresh loop's job,
   and a create that timed out waiting for capacity would taint the group,
   so the next apply would replace it.
@@ -259,6 +265,9 @@ destroy of all three roles.
 
 **10.** An Auto Scaling group launching Spot through the launch template's
  `instance_market_options` (CAPA does the same).
+
+**11.** The Kubernetes Cluster Autoscaler's aws provider driving a CAPTF
+pool (`autoscaler = "external"`) has not been run against a live cluster.
 
 ## Rejected alternatives
 

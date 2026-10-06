@@ -64,8 +64,20 @@ variable "additional_tags" {
   }
 }
 
+variable "autoscaler" {
+  description = "What sets the group's desired capacity while autoscaling is enabled: native, this module's target-tracking policy, or external, no policy, so a scaler outside the module (such as the Kubernetes Cluster Autoscaler's aws cloud provider) sets it within autoscaling.min and max. Native is the default so an autoscaled pool scales without anything else installed."
+  type        = string
+  default     = "native"
+  nullable    = false
+
+  validation {
+    condition     = contains(["native", "external"], var.autoscaler)
+    error_message = "autoscaler must be native or external."
+  }
+}
+
 variable "autoscaling_target_cpu_percent" {
-  description = "Average CPU utilization the target-tracking policy keeps the group at while autoscaling is enabled. CPU is a proxy: pods waiting for capacity do not raise it."
+  description = "Average CPU utilization the target-tracking policy keeps the group at while autoscaling is enabled. Ignored when autoscaler is external. CPU is a proxy: pods waiting for capacity do not raise it."
   type        = number
   default     = 60
   nullable    = false

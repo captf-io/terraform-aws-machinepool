@@ -102,6 +102,24 @@ run "autoscaling_enabled" {
   }
 }
 
+run "autoscaling_external" {
+  command = plan
+
+  variables {
+    autoscaling = { enabled = true, min = 2, max = 5 }
+    autoscaler  = "external"
+  }
+
+  assert {
+    condition     = aws_autoscaling_group.pool_autoscaling_group[0].min_size == 2 && aws_autoscaling_group.pool_autoscaling_group[0].max_size == 5 && aws_autoscaling_group.pool_autoscaling_group[0].desired_capacity == 3
+    error_message = "an externally autoscaled pool must take min and max from autoscaling and start at replicas."
+  }
+  assert {
+    condition     = length(aws_autoscaling_policy.pool_scaling_policy) == 0
+    error_message = "an externally autoscaled pool must not get a scaling policy."
+  }
+}
+
 run "zero_replicas_healthy" {
   command = plan
 

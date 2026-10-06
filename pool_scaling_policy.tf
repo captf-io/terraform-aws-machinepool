@@ -12,12 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# With autoscaling enabled, a target-tracking policy owns the group's desired
-# capacity within [autoscaling.min, autoscaling.max]
-# (machinepool.md "autoscaling"). Scale-in terminates instances without
-# draining their nodes (README "Limitations").
+# With autoscaling enabled and autoscaler native, a target-tracking policy
+# owns the group's desired capacity within [autoscaling.min, autoscaling.max]
+# (machinepool.md "autoscaling"). With autoscaler external there is no
+# policy: a scaler outside the module sets the capacity within the same
+# bounds. Scale-in terminates instances without draining their nodes
+# (README "Limitations").
 resource "aws_autoscaling_policy" "pool_scaling_policy" {
-  count = var.autoscaling.enabled ? 1 : 0
+  count = var.autoscaling.enabled && var.autoscaler == "native" ? 1 : 0
 
   autoscaling_group_name = aws_autoscaling_group.pool_autoscaling_group[0].name
   name                   = "captf-cpu-target-tracking"

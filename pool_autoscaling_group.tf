@@ -16,7 +16,8 @@
 # primary resource and holds its preconditions.
 #
 # desired_capacity is set at creation and then ignored: with autoscaling the
-# scaling policy owns it, and a fixed-size pool pins min_size and max_size
+# scaling policy (autoscaler native) or a scaler outside the module
+# (autoscaler external) owns it, and a fixed-size pool pins min_size and max_size
 # to replicas instead, which moves the desired capacity with them
 # (UpdateAutoScalingGroup: a new minimum above, or maximum below, the
 # desired capacity resets it; machinepool.md "Module note").

@@ -126,7 +126,7 @@ variable "node_labels" {
 }
 
 variable "autoscaling" {
-  description = "Parsed from the MachinePool's cluster-api-autoscaler-node-group-min-size and -max-size annotations. enabled hands the desired capacity to a target-tracking policy within [min, max]."
+  description = "Parsed from the MachinePool's cluster-api-autoscaler-node-group-min-size and -max-size annotations. enabled hands the desired capacity to a target-tracking policy within [min, max], or to a scaler outside the module when autoscaler is external."
   type = object({
     enabled = bool
     min     = number
