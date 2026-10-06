@@ -66,3 +66,52 @@ jobs:
           # tflint downloads its rulesets from GitHub releases.
           GITHUB_TOKEN: ${{ github.token }}
         run: make verify ENGINE=docker
+
+  # A release tag that passed verify gets its GitHub Release, with notes from
+  # .github/release-notes.sh (upgrade notes come from the tag message body).
+  # Only an annotated tag on main that GitHub shows as signed gets one;
+  # module-images verifies the signature again before it builds the image.
+  # Re-running the job rewrites the notes of the existing release.
+  release:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          # checkout leaves the pushed tag lightweight; fetch the tag object.
+          git fetch --force --no-tags origin "refs/tags/${TAG}:refs/tags/${TAG}"
+          [[ "$(git cat-file -t "refs/tags/${TAG}")" == tag ]] ||
+            { echo "::error::${TAG} is not an annotated tag"; exit 1; }
+          verified="$(gh api "repos/${GH_REPO}/git/tags/$(git rev-parse "refs/tags/${TAG}")" -q .verification.verified)"
+          [[ "${verified}" == true ]] ||
+            { echo "::error::GitHub does not show ${TAG} as signed"; exit 1; }
+          git merge-base --is-ancestor "refs/tags/${TAG}^{commit}" origin/main ||
+            { echo "::error::${TAG} is not on main"; exit 1; }
+
+          .github/release-notes.sh "${TAG}" >"${RUNNER_TEMP}/notes.md"
+          flags=(--title "${TAG}" --notes-file "${RUNNER_TEMP}/notes.md")
+          newest="$(git tag --list 'v*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)"
+          if [[ "${TAG}" == *-rc.* ]]; then
+            flags+=(--prerelease --latest=false)
+          elif [[ "${TAG}" == "${newest}" ]]; then
+            flags+=(--latest=true)
+          else
+            flags+=(--latest=false)
+          fi
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            gh release edit "${TAG}" "${flags[@]}"
+          else
+            gh release create "${TAG}" --verify-tag "${flags[@]}"
+          fi
