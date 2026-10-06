@@ -29,11 +29,11 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # Every check on the module code: license headers, fmt, layout and tags,
-  # validate on both runtimes and their floors, unit tests, shellcheck,
-  # tflint, tfcapi-lint and trivy. `make verify` runs its independent groups
+  # Every check on the module code: tfcapi-lint, then license headers, fmt,
+  # layout and tags, validate on both runtimes and their floors, unit tests,
+  # shellcheck, tflint and trivy. `make verify` runs its independent groups
   # side by side, so the job takes as long as the slowest runtime, not the
-  # sum. tfcapi-lint is built from the provider repository, which is public.
+  # sum.
   verify:
     runs-on: ubuntu-24.04
     timeout-minutes: 12
@@ -41,19 +41,28 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The role and the allowed warnings come from the Makefile (ROLE,
+      # TFCAPI_LINT_ALLOW), so CI lints exactly as `make tfcapi-lint` does.
+      - name: tfcapi-lint settings
+        id: lint
+        run: |
+          echo "role=$(make -s --no-print-directory print-ROLE)" >>"${GITHUB_OUTPUT}"
+          echo "allow=$(make -s --no-print-directory print-TFCAPI_LINT_ALLOW)" >>"${GITHUB_OUTPUT}"
+      # The provider's tfcapi-lint image, at the version the pin names
+      # (https://captf.io/docs/module-author/tfcapi-lint-ci.html).
+      - uses: captf-io/cluster-api-provider-terraform/actions/tfcapi-lint@a31db9395964b771715992f9b63409e7c4044c4c # v0.1.1
         with:
-          repository: captf-io/cluster-api-provider-terraform
-          path: .cache/provider
-          persist-credentials: false
-      # Caches the Go modules and build cache, keyed on the provider's go.sum,
-      # so building tfcapi-lint takes seconds on a warm cache.
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: .cache/provider/go.mod
-          cache-dependency-path: .cache/provider/go.sum
+          command: module
+          target: .
+          role: ${{ steps.lint.outputs.role }}
+          strict: true
+          args: ${{ steps.lint.outputs.allow }}
+      # tfcapi-lint ran above, so `make verify` prints SKIP for it here: CI
+      # has no provider checkout to build it from. Runs even when the lint
+      # failed, to report every problem in one go.
       - name: Verify
+        if: ${{ !cancelled() }}
         env:
           # tflint downloads its rulesets from GitHub releases.
           GITHUB_TOKEN: ${{ github.token }}
-        run: make verify ENGINE=docker PROVIDER_DIR=.cache/provider
+        run: make verify ENGINE=docker

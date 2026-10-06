@@ -476,10 +476,13 @@ image (section 16).
 | `clean` | removes `build/` (the staged module and schemas); keeps `.cache/` and `.tools/` |
 
 `RUNTIMES` selects the runtimes (`make validate RUNTIMES=opentofu`).
-`tfcapi-lint` is built from the provider repository (`PROVIDER_DIR`, which
-defaults to `../cluster-api-provider-terraform` and which CI checks out
-into `.cache/provider`); without a checkout or a `TFCAPI_LINT` binary it
-skips itself and prints that it did.
+Locally, `tfcapi-lint` is built from the provider repository
+(`PROVIDER_DIR`, which defaults to `../cluster-api-provider-terraform`);
+without a checkout or a `TFCAPI_LINT` binary it skips itself and prints
+that it did. CI runs it with the provider's tfcapi-lint GitHub Action
+instead, pinned to a provider release in `.github/workflows/ci.yml` and
+given `ROLE` and `TFCAPI_LINT_ALLOW` from the Makefile, so `make verify`
+in CI prints that skip.
 
 ## 16. Images
 
