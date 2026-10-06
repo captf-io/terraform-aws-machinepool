@@ -63,7 +63,7 @@ metadata:
   name: "${CLUSTER_NAME}"
 spec:
   source:
-    image: ghcr.io/captf-io/aws-cluster:v0.1.0-opentofu
+    image: ghcr.io/captf-io/module-images/aws-cluster:v0.1.0-opentofu
   identityRef:
     name: "${TERRAFORM_IDENTITY_NAME:=aws}"
   # Machines and pools without their own identityRef use this one.
@@ -130,7 +130,7 @@ spec:
   template:
     spec:
       source:
-        image: ghcr.io/captf-io/aws-machine:v0.1.0-opentofu
+        image: ghcr.io/captf-io/module-images/aws-machine:v0.1.0-opentofu
       variables:
         instance_type: "${AWS_CONTROL_PLANE_MACHINE_TYPE:=m6i.large}"
 ---
@@ -166,7 +166,7 @@ spec:
   template:
     spec:
       source:
-        image: ghcr.io/captf-io/aws-machine:v0.1.0-opentofu
+        image: ghcr.io/captf-io/module-images/aws-machine:v0.1.0-opentofu
       variables:
         instance_type: "${AWS_NODE_MACHINE_TYPE:=m6i.large}"
 ---
@@ -239,7 +239,7 @@ metadata:
     cluster.x-k8s.io/cluster-name: "${CLUSTER_NAME}"
 spec:
   source:
-    image: ghcr.io/captf-io/aws-machinepool:v0.1.0-opentofu
+    image: ghcr.io/captf-io/module-images/aws-machinepool:v0.1.0-opentofu
   variables:
     instance_type: "${AWS_NODE_MACHINE_TYPE:=m6i.large}"
 ---

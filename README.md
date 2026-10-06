@@ -32,9 +32,9 @@ The CAPTF AWS machinepool module is the Terraform/OpenTofu root module behind
 `TerraformMachinePool`. It is the `machinepool` role for AWS: one Auto Scaling
 group per MachinePool. It implements the `v1alpha1`
 [machinepool role](https://captf.io/docs/module-author/contract/v1alpha1/machinepool.html).
-The images are built from
-[aws-modules](https://github.com/captf-io/aws-modules) and published as
-`ghcr.io/captf-io/aws-machinepool`; this repository holds the module code
+The images are built by
+[module-images](https://github.com/captf-io/module-images) from this repository's releases and published as
+`ghcr.io/captf-io/module-images/aws-machinepool`; this repository holds the module code
 only.
 
 Pool instances are workers; everything cluster-wide comes from the cluster's
@@ -42,7 +42,7 @@ exports.
 
 ## Using it
 
-CAPTF runs this module from the module image `ghcr.io/captf-io/aws-machinepool`:
+CAPTF runs this module from the module image `ghcr.io/captf-io/module-images/aws-machinepool`:
 set the image on a `TerraformMachinePool`'s `spec.source.image`, and the
 controller renders every input. The module is also published to the Terraform
 Registry as `captf-io/machinepool/aws` and can be called directly:
@@ -279,7 +279,7 @@ metadata:
     cluster.x-k8s.io/cluster-name: demo
 spec:
   source:
-    image: ghcr.io/captf-io/aws-machinepool:v0.1.0-opentofu
+    image: ghcr.io/captf-io/module-images/aws-machinepool:v0.1.0-opentofu
   variables:
     instance_type: m6i.large
 ```

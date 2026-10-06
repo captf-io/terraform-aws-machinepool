@@ -485,8 +485,9 @@ skips itself and prints that it did.
 
 Not applicable: these repositories hold the module and its checks only, and
 build no images, Dockerfiles or smoke tests. CI covers the code alone. The
-module images (`ghcr.io/captf-io/<cloud>-<role>`) are built elsewhere, by
-the `<cloud>-modules` repositories. The image contract of
+module images (`ghcr.io/captf-io/module-images/<cloud>-<role>`) are built
+elsewhere, by [module-images](https://github.com/captf-io/module-images) from
+these repositories' releases. The image contract of
 <https://captf.io/docs/module-author/contract/v1alpha1/> (paths, labels,
 inputs, outputs) still binds the module, and `tfcapi-lint module` checks
 the part that lives in source.
