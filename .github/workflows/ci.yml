@@ -50,7 +50,7 @@ jobs:
           echo "allow=$(make -s --no-print-directory print-TFCAPI_LINT_ALLOW)" >>"${GITHUB_OUTPUT}"
       # The provider's tfcapi-lint image, at the version the pin names
       # (https://captf.io/docs/module-author/tfcapi-lint-ci.html).
-      - uses: captf-io/cluster-api-provider-terraform/actions/tfcapi-lint@a31db9395964b771715992f9b63409e7c4044c4c # v0.1.1
+      - uses: captf-io/cluster-api-provider-terraform/actions/tfcapi-lint@3c7bece452eae4847057ed970df575366e64588b # v0.2.3
         with:
           command: module
           target: .
